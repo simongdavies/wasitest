@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Wasmtime;
 using Xunit;
 
@@ -8,24 +9,25 @@ namespace wasitest
     public class TestStdOut
     {
         [Fact]
-        public void WriteToReadFromStdOut()
+        public async Task WriteToReadFromStdOut()
         {
-          var filePath=System.IO.Path.GetTempFileName();
-          Console.WriteLine(filePath);
+          using var file=new TempFile();
+          Console.WriteLine(file.Path);
           using var engine = new Engine();
           using var module = Module.FromFile(engine, @"Modules/optimized.wasm");
           using var host = new Host(engine);
           var config = new WasiConfiguration();
 
-          config.WithStandardOutput(filePath);            
+          config.WithStandardOutput(file.Path);            
           host.DefineWasi("wasi_snapshot_preview1", config);
 
           using dynamic instance = host.Instantiate(module);
           instance._start();
-          var line = File.ReadAllText(filePath);
-          Assert.Equal("Hello, world!\n", line);
+          var fileStream = new FileStream(file.Path,FileMode.Open,  FileAccess.Read, FileShare.ReadWrite);
+          using var reader = new StreamReader(fileStream);
+          var line = await reader.ReadLineAsync();
+          Assert.Equal("Hello, world!", line);
           Console.WriteLine(line);
-          File.Delete(filePath);
         }
     }
 }
